@@ -1093,6 +1093,73 @@ namespace Microsoft
                         KHR::Materials::DeserializeClearcoat("\"not-an-object\"", extensionDeserializer);
                     });
                 }
+
+                // Negative regression: every material-extension textureInfo
+                // sub-object (clearcoatNormalTexture, transmissionTexture,
+                // iridescenceTexture, sheenColorTexture, specularColorTexture,
+                // thicknessTexture) must be a JSON object. They all funnel into
+                // the shared ParseTextureInfo, whose RequireObject guard must
+                // reject a non-object value before any member lookup walks the
+                // value's storage as an object member table.
+                GLTFSDK_TEST_METHOD(ExtensionsTests, Extensions_Test_ClearcoatNormalTexture_NotObject)
+                {
+                    ExtensionDeserializer extensionDeserializer;
+                    Assert::ExpectException<GLTFException>([&extensionDeserializer]()
+                    {
+                        KHR::Materials::DeserializeClearcoat(
+                            R"({"clearcoatNormalTexture": "not-an-object"})", extensionDeserializer);
+                    });
+                }
+
+                GLTFSDK_TEST_METHOD(ExtensionsTests, Extensions_Test_TransmissionTexture_NotObject)
+                {
+                    ExtensionDeserializer extensionDeserializer;
+                    Assert::ExpectException<GLTFException>([&extensionDeserializer]()
+                    {
+                        KHR::Materials::DeserializeTransmission(
+                            R"({"transmissionTexture": "not-an-object"})", extensionDeserializer);
+                    });
+                }
+
+                GLTFSDK_TEST_METHOD(ExtensionsTests, Extensions_Test_IridescenceTexture_NotObject)
+                {
+                    ExtensionDeserializer extensionDeserializer;
+                    Assert::ExpectException<GLTFException>([&extensionDeserializer]()
+                    {
+                        KHR::Materials::DeserializeIridescence(
+                            R"({"iridescenceTexture": "not-an-object"})", extensionDeserializer);
+                    });
+                }
+
+                GLTFSDK_TEST_METHOD(ExtensionsTests, Extensions_Test_SheenColorTexture_NotObject)
+                {
+                    ExtensionDeserializer extensionDeserializer;
+                    Assert::ExpectException<GLTFException>([&extensionDeserializer]()
+                    {
+                        KHR::Materials::DeserializeSheen(
+                            R"({"sheenColorTexture": "not-an-object"})", extensionDeserializer);
+                    });
+                }
+
+                GLTFSDK_TEST_METHOD(ExtensionsTests, Extensions_Test_SpecularColorTexture_NotObject)
+                {
+                    ExtensionDeserializer extensionDeserializer;
+                    Assert::ExpectException<GLTFException>([&extensionDeserializer]()
+                    {
+                        KHR::Materials::DeserializeSpecular(
+                            R"({"specularColorTexture": "not-an-object"})", extensionDeserializer);
+                    });
+                }
+
+                GLTFSDK_TEST_METHOD(ExtensionsTests, Extensions_Test_ThicknessTexture_NotObject)
+                {
+                    ExtensionDeserializer extensionDeserializer;
+                    Assert::ExpectException<GLTFException>([&extensionDeserializer]()
+                    {
+                        KHR::Materials::DeserializeVolume(
+                            R"({"thicknessTexture": "not-an-object"})", extensionDeserializer);
+                    });
+                }
             };
         }
     }
