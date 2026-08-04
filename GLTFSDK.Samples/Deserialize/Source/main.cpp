@@ -5,6 +5,8 @@
 #include <GLTFSDK/GLTFResourceReader.h>
 #include <GLTFSDK/GLBResourceReader.h>
 #include <GLTFSDK/Deserialize.h>
+#include <GLTFSDK/ExtensionsKHR.h>
+#include <GLTFSDK/Schema.h>
 
 #include <filesystem>
 
@@ -19,6 +21,23 @@ using namespace Microsoft::glTF;
 
 namespace
 {
+    // Controls how the sample deserializes the glTF manifest. These map directly onto the
+    // arguments accepted by Microsoft::glTF::Deserialize so the sample can exercise the same
+    // code paths a host application would.
+    struct Options
+    {
+        // When true, the KHR extension deserializers are registered so that recognised KHR_*
+        // extension objects are parsed into their strongly-typed representations. When false
+        // (the default), extension objects are retained only as raw JSON and their dedicated
+        // deserializers are not invoked.
+        bool registerExtensions = false;
+
+        // When true (the default), the manifest is validated against the bundled JSON schema
+        // before deserialization. When false, schema validation is skipped (SchemaFlags::DisableSchemaRoot),
+        // which lets callers deserialize manifests that do not conform to the schema.
+        bool validateSchema = true;
+    };
+
     // The glTF SDK is decoupled from all file I/O by the IStreamReader (and IStreamWriter)
     // interface(s) and the C++ stream-based I/O library. This allows the glTF SDK to be used in
     // sandboxed environments, such as WebAssembly modules and UWP apps, where any file I/O code
@@ -183,7 +202,7 @@ namespace
         }
     }
 
-    void PrintInfo(const std::filesystem::path& path)
+    void PrintInfo(const std::filesystem::path& path, const Options& options)
     {
         // Pass the absolute path, without the filename, to the stream reader
         auto streamReader = std::make_unique<StreamReader>(path.parent_path());
@@ -235,9 +254,23 @@ namespace
 
         Document document;
 
+        std::cout << "### glTF Info - " << pathFile << " ###\n\n";
+        std::cout << "Extension deserializers: " << (options.registerExtensions ? "enabled" : "disabled") << "\n";
+        std::cout << "Schema validation:       " << (options.validateSchema ? "enabled" : "disabled") << "\n\n";
+
+        const SchemaFlags schemaFlags = options.validateSchema ? SchemaFlags::None : SchemaFlags::DisableSchemaRoot;
+
         try
         {
-            document = Deserialize(manifest);
+            if (options.registerExtensions)
+            {
+                const auto extensionDeserializer = KHR::GetKHRExtensionDeserializer();
+                document = Deserialize(manifest, extensionDeserializer, DeserializeFlags::None, schemaFlags);
+            }
+            else
+            {
+                document = Deserialize(manifest, DeserializeFlags::None, schemaFlags);
+            }
         }
         catch (const GLTFException& ex)
         {
@@ -249,10 +282,24 @@ namespace
             throw std::runtime_error(ss.str());
         }
 
-        std::cout << "### glTF Info - " << pathFile << " ###\n\n";
-
         PrintDocumentInfo(document);
         PrintResourceInfo(document, *resourceReader);
+    }
+
+    void PrintUsage()
+    {
+        std::cout <<
+            "Usage: Deserialize [options] <path>\n"
+            "\n"
+            "  <path>            Path to a .gltf or .glb file to deserialize.\n"
+            "\n"
+            "Options:\n"
+            "  --extensions      Register the KHR extension deserializers so KHR_* extension\n"
+            "                    objects are parsed (default: disabled).\n"
+            "  --no-extensions   Do not register extension deserializers (default).\n"
+            "  --schema          Validate the manifest against the bundled JSON schema (default).\n"
+            "  --no-schema       Skip JSON schema validation (SchemaFlags::DisableSchemaRoot).\n"
+            "  -h, --help        Print this help text and exit.\n";
     }
 }
 
@@ -264,12 +311,58 @@ int main(int argc, char* argv[])
 {
     try
     {
-        if (argc != 2U)
+        Options options;
+        std::filesystem::path path;
+        bool havePath = false;
+
+        for (int i = 1; i < argc; ++i)
         {
-            throw std::runtime_error("Unexpected number of command line arguments");
+            // Convert each argument to a UTF-8 std::string for option matching. The positional
+            // path argument is retained in its native encoding (see below) to preserve Unicode.
+            const std::filesystem::path argPath = argv[i];
+            const std::string arg = argPath.u8string();
+
+            if (arg == "--extensions")
+            {
+                options.registerExtensions = true;
+            }
+            else if (arg == "--no-extensions")
+            {
+                options.registerExtensions = false;
+            }
+            else if (arg == "--schema")
+            {
+                options.validateSchema = true;
+            }
+            else if (arg == "--no-schema")
+            {
+                options.validateSchema = false;
+            }
+            else if (arg == "-h" || arg == "--help")
+            {
+                PrintUsage();
+                return EXIT_SUCCESS;
+            }
+            else if (!arg.empty() && arg.front() == '-')
+            {
+                throw std::runtime_error("Unrecognized option: " + arg);
+            }
+            else if (!havePath)
+            {
+                path = argPath;
+                havePath = true;
+            }
+            else
+            {
+                throw std::runtime_error("Unexpected extra command line argument: " + arg);
+            }
         }
 
-        std::filesystem::path path = argv[1U];
+        if (!havePath)
+        {
+            PrintUsage();
+            throw std::runtime_error("No input file specified");
+        }
 
         if (path.is_relative())
         {
@@ -290,7 +383,7 @@ int main(int argc, char* argv[])
             throw std::runtime_error("Command line argument path has no filename extension");
         }
 
-        PrintInfo(path);
+        PrintInfo(path, options);
     }
     catch (const std::runtime_error& ex)
     {
