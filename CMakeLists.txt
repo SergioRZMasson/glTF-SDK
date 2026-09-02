@@ -6,6 +6,8 @@ if(ENABLE_UNIT_TESTS)
     enable_testing()
 endif()
 
+option(ENABLE_BENCHMARKS "Build the opt-in load/export benchmark harness" OFF)
+
 # Disable the samples on macOS, iOS, and Android since the experimental features they use
 # do not yet build with XCode or clang on these platforms.
 if(APPLE OR ANDROID_OS_PLATFORM)
@@ -44,6 +46,10 @@ if(NOT RapidJSON_FOUND)
 endif()
 
 add_subdirectory(GLTFSDK)
+
+if(ENABLE_BENCHMARKS AND (NOT DEFINED EMSCRIPTEN))
+    add_subdirectory(Benchmarks/LoadExport)
+endif()
 
 if(RapidJSON_FOUND)
     target_include_directories(GLTFSDK
